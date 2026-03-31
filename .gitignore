@@ -9,6 +9,9 @@ __pycache__/
 *$py.class
 
 .vscode/
+.claude/   
+.codex/
+.agents/
 
 *.loggh 
 *.txt
@@ -18,4 +21,3 @@ __pycache__/
 *.gz
 *.OU
 
-res/

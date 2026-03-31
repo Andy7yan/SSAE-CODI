@@ -150,52 +150,43 @@ def _build_fake_bundle(config: Stage1Config) -> LoadedModelBundle:
     )
 
 
-def _write_test_config(tmp_path: Path, capture_hidden: bool, capture_mode: str) -> Path:
+def _build_test_config(tmp_path: Path, capture_hidden: bool, capture_mode: str) -> Stage1Config:
     data_file = tmp_path / "gsm8k_debug.jsonl"
     data_file.write_text(
         '{"sample_id":"sample_001","question":"What is 3 plus 4?","answer":"7"}\n',
         encoding="utf-8",
     )
-
-    config_file = tmp_path / "config.yaml"
-    config_file.write_text(
-        "\n".join(
-            [
-                'model_name_or_path: "zen-E/CODI-gpt2"',
-                'hf_token_env_var: "HF_TOKEN"',
-                'device: "cpu"',
-                'dtype: "float32"',
-                "num_latent: 2",
-                "inf_latent_iterations: 2",
-                f'output_dir: "{(tmp_path / "outputs").as_posix()}"',
-                f"capture_hidden: {'true' if capture_hidden else 'false'}",
-                f'capture_mode: "{capture_mode}"',
-                "target_layer_index: -1",
-                "max_samples: 1",
-                f'data_path: "{data_file.as_posix()}"',
-                "max_new_tokens: 8",
-                "do_sample: false",
-                "temperature: 0.0",
-                "top_p: 1.0",
-                "trust_remote_code: true",
-                "seed: 0",
-                "",
-            ]
-        ),
-        encoding="utf-8",
+    return Stage1Config(
+        model_name_or_path="zen-E/CODI-gpt2",
+        hf_token_env_var="HF_TOKEN",
+        device="cpu",
+        dtype="float32",
+        num_latent=2,
+        inf_latent_iterations=2,
+        output_dir=(tmp_path / "outputs").as_posix(),
+        capture_hidden=capture_hidden,
+        capture_mode=capture_mode,
+        target_layer_index=-1,
+        max_samples=1,
+        data_path=data_file.as_posix(),
+        max_new_tokens=8,
+        do_sample=False,
+        temperature=0.0,
+        top_p=1.0,
+        trust_remote_code=True,
+        seed=0,
     )
-    return config_file
 
 
 def test_config_can_load() -> None:
-    config = Stage1Config.from_yaml(REPO_ROOT / "configs" / "codi_gpt2_stage1.yaml")
+    config = Stage1Config()
     assert config.model_name_or_path == "zen-E/CODI-gpt2"
     assert config.capture_mode == "seed-only"
     assert config.inf_latent_iterations == 6
 
 
 def test_model_can_load(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = Stage1Config.from_yaml(REPO_ROOT / "configs" / "codi_gpt2_stage1.yaml")
+    config = Stage1Config()
     fake_bundle = _build_fake_bundle(config)
     monkeypatch.setattr("stage1.load_model._load_direct_hf_bundle", lambda config, token, logger=None: fake_bundle)
     bundle = load_model_bundle(config=config)
@@ -204,12 +195,11 @@ def test_model_can_load(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_one_sample_can_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    config_file = _write_test_config(tmp_path=tmp_path, capture_hidden=False, capture_mode="seed-only")
-    config = Stage1Config.from_yaml(config_file)
+    config = _build_test_config(tmp_path=tmp_path, capture_hidden=False, capture_mode="seed-only")
     fake_bundle = _build_fake_bundle(config)
     monkeypatch.setattr("stage1.run_inference.load_model_bundle", lambda config, logger=None: fake_bundle)
 
-    summary = run_stage1(config_path=config_file, run_name="pytest_smoke")
+    summary = run_stage1(config=config, run_name="pytest_smoke")
     results_path = Path(summary["inference_dir"]) / "results.jsonl"
 
     assert results_path.exists()
@@ -222,12 +212,11 @@ def test_one_hidden_output_file_can_be_created_in_seed_only_mode(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    config_file = _write_test_config(tmp_path=tmp_path, capture_hidden=True, capture_mode="seed-only")
-    config = Stage1Config.from_yaml(config_file)
+    config = _build_test_config(tmp_path=tmp_path, capture_hidden=True, capture_mode="seed-only")
     fake_bundle = _build_fake_bundle(config)
     monkeypatch.setattr("stage1.run_inference.load_model_bundle", lambda config, logger=None: fake_bundle)
 
-    summary = run_stage1(config_path=config_file, run_name="pytest_capture")
+    summary = run_stage1(config=config, run_name="pytest_capture")
     hidden_dir = Path(summary["hidden_dir"])
     hidden_files = list(hidden_dir.glob("*.pt"))
 

@@ -240,13 +240,13 @@ def capture_hidden_for_sample(
 
 
 def run_capture_only(
-    config_path: str | Path,
+    config: Stage1Config | None = None,
     max_samples_override: int | None = None,
     run_name: str | None = None,
 ) -> dict[str, Any]:
     from stage1.io import read_jsonl
 
-    config = Stage1Config.from_yaml(config_path)
+    config = config or Stage1Config()
     if max_samples_override is not None:
         config = config.with_overrides(max_samples=max_samples_override)
 
@@ -292,13 +292,11 @@ def run_capture_only(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Capture Stage 1 CODI hidden states without running full inference.")
-    parser.add_argument("--config", required=True, help="Path to the Stage 1 YAML config.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
     parser.add_argument("--run-name", default=None, help="Optional run name override.")
     args = parser.parse_args()
 
     run_capture_only(
-        config_path=args.config,
         max_samples_override=args.max_samples,
         run_name=args.run_name,
     )

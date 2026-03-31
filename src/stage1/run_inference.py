@@ -4,12 +4,11 @@ import argparse
 import random
 import time
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from stage1.config import Stage1Config
 from stage1.inspect_latent import capture_hidden_for_sample
-from stage1.io import ensure_dir, read_jsonl, write_json, write_jsonl, write_text
+from stage1.io import ensure_dir, read_jsonl, write_json, write_jsonl
 from stage1.load_model import LoadedModelBundle, load_model_bundle
 from stage1.logging_utils import setup_logger
 
@@ -218,14 +217,14 @@ def _create_run_layout(config: Stage1Config, run_name: str) -> dict[str, Path]:
 
 
 def run_stage1(
-    config_path: str | Path,
+    config: Stage1Config | None = None,
     max_samples_override: int | None = None,
     output_dir_override: str | None = None,
     capture_hidden_override: bool | None = None,
     capture_mode_override: str | None = None,
     run_name: str | None = None,
 ) -> dict[str, Any]:
-    config = Stage1Config.from_yaml(config_path)
+    config = config or Stage1Config()
     overrides: dict[str, Any] = {}
     if max_samples_override is not None:
         overrides["max_samples"] = max_samples_override
@@ -244,13 +243,10 @@ def run_stage1(
     logger = setup_logger("stage1.run_inference", run_layout["log_file"])
 
     logger.info("Starting Stage 1 run: %s", effective_run_name)
-    logger.info("Loading config from %s", Path(config_path).resolve())
     _set_seed(config.seed)
 
     bundle = load_model_bundle(config=config, logger=logger)
 
-    config_source_text = Path(config_path).read_text(encoding="utf-8")
-    write_text(run_layout["inference_dir"] / "config_snapshot.yaml", config_source_text)
     write_json(run_layout["inference_dir"] / "effective_config.json", config.to_dict())
     write_json(run_layout["inference_dir"] / "model_info.json", bundle.model_info)
 
@@ -325,7 +321,6 @@ def run_stage1(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Stage 1 CODI inference and optional hidden capture.")
-    parser.add_argument("--config", required=True, help="Path to the Stage 1 YAML config.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
     parser.add_argument("--output-dir", default=None, help="Optional output directory override.")
     parser.add_argument("--capture-hidden", action="store_true", help="Force hidden capture on.")
@@ -349,7 +344,6 @@ def main() -> None:
         capture_hidden_override = False
 
     run_stage1(
-        config_path=args.config,
         max_samples_override=args.max_samples,
         output_dir_override=args.output_dir,
         capture_hidden_override=capture_hidden_override,

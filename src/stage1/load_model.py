@@ -369,6 +369,7 @@ def _log_model_info(bundle: LoadedModelBundle, logger: Any | None = None) -> Non
 
 
 def load_model_bundle(config: Stage1Config, logger: Any | None = None) -> LoadedModelBundle:
+    os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
     token = _resolve_auth_token(config.hf_token_env_var)
     if logger is not None:
         if token:

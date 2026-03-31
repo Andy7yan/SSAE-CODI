@@ -17,8 +17,8 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 
 - Model family: CODI
 - Default checkpoint: `zen-E/CODI-gpt2`
-- Default platform: Windows + PowerShell
-- Python target: 3.12
+- Default platform: Katana + Linux
+- Python target: 3.10
 
 ## Project Structure
 
@@ -26,14 +26,8 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 .
 |-- README.md
 |-- pyproject.toml
-|-- configs/
-|   `-- codi_gpt2_stage1.yaml
 |-- data/
 |   `-- gsm8k_debug.jsonl
-|-- scripts/
-|   |-- setup_stage1.ps1
-|   |-- run_stage1_smoke.ps1
-|   `-- run_stage1_capture.ps1
 |-- src/
 |   `-- stage1/
 |       |-- config.py
@@ -52,7 +46,6 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 outputs/stage1/
 |-- inference/
 |   `-- <run_name>/
-|       |-- config_snapshot.yaml
 |       |-- effective_config.json
 |       |-- model_info.json
 |       |-- results.jsonl
@@ -67,39 +60,37 @@ outputs/stage1/
     `-- <run_name>.log
 ```
 
-The scaffold keeps inference outputs, hidden dumps, and logs in separate directories so Stage 2 can consume them without reworking Stage 1.
+The scaffold keeps inference outputs, hidden dumps, and logs in separate directories so they stay inspectable without adding much project overhead.
 
 ## Setup
 
-```powershell
-.\scripts\setup_stage1.ps1
+```bash
+python3 -m pip install -e .
 ```
 
-If Hugging Face authentication is required:
-
-```powershell
-$env:HF_TOKEN = "your_token_here"
-```
+If Hugging Face authentication is required, export `HF_TOKEN` before running.
 
 ## Run
 
 Smoke test:
 
-```powershell
-.\scripts\run_stage1_smoke.ps1
+```bash
+export PYTHONPATH=/path/to/repo/src
+python3 -m stage1.run_inference --max-samples 1 --no-capture-hidden --run-name stage1_smoke
 ```
 
 Inference plus hidden capture:
 
-```powershell
-.\scripts\run_stage1_capture.ps1
+```bash
+export PYTHONPATH=/path/to/repo/src
+python3 -m stage1.run_inference --capture-hidden --capture-mode per-latent-step --run-name stage1_capture
 ```
 
 Direct module usage:
 
-```powershell
-$env:PYTHONPATH = (Resolve-Path .\src).Path
-python -m stage1.run_inference --config .\configs\codi_gpt2_stage1.yaml --max-samples 1
+```bash
+export PYTHONPATH=/path/to/repo/src
+python3 -m stage1.run_inference --max-samples 1
 ```
 
 ## Input and Output
@@ -240,7 +231,7 @@ This section records implementation choices that have already been fixed. It is 
 - **Main implementation language:** Python
 - **Primary deep learning stack:** PyTorch + HuggingFace Transformers
 - **Linting / formatting:** `ruff` and `ruff format`
-- **Config style:** YAML-based configuration with typed Python config objects
+- **Config style:** typed Python config object with in-code defaults
 - **Latent storage preference:** `safetensors` instead of pickle
 - **Local development environment:** Windows + PowerShell + VS Code
 - **Remote compute environment:** UNSW Katana HPC
