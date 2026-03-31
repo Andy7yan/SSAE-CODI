@@ -315,11 +315,6 @@ def run_inference_job(
     write_json(run_layout["run_dir"] / "run_summary.json", summary)
     logger.info("Inference run finished. Summary: %s", summary)
     return summary
-
-
-run_stage1 = run_inference_job
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run CODI inference and optional hidden capture.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")

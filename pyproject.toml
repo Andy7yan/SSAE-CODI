@@ -26,9 +26,7 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
+py-modules = ["config", "io_utils", "load_model", "logging_utils", "run_inference", "inspect_latent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,17 +1,17 @@
-# SSAE-CODI Stage 1
+# SSAE-CODI
 
-## Stage 1 Goal
+## Current Goal
 
-Stage 1 focuses on model setup only.
+The current focus is keeping a minimal CODI scaffold working on Katana.
 
 The goal is to provide a minimal, auditable scaffold that can:
 
 - load the target CODI checkpoint,
 - run one minimal inference pass,
 - expose the latent-thought generation path for inspection,
-- save hidden dumps in a format that Stage 2 can reuse for hidden-state extraction and dataset building.
+- save hidden dumps in a format that later analysis code can reuse for hidden-state extraction and dataset building.
 
-This stage does not implement training, probes, or SSAE dataset construction yet.
+This scaffold does not implement training, probes, or SSAE dataset construction yet.
 
 ## Default Target
 
@@ -31,13 +31,12 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 |-- data/
 |   `-- gsm8k_debug.jsonl
 |-- src/
-|   `-- stage1/
-|       |-- config.py
-|       |-- io.py
-|       |-- inspect_latent.py
-|       |-- load_model.py
-|       |-- logging_utils.py
-|       `-- run_inference.py
+|   |-- config.py
+|   |-- io_utils.py
+|   |-- inspect_latent.py
+|   |-- load_model.py
+|   |-- logging_utils.py
+|   `-- run_inference.py
 `-- tests/
     `-- test_smoke.py
 ```
@@ -114,7 +113,7 @@ The smoke test currently checks only two things:
 
 ## Limits
 
-- Stage 1 only targets inference and inspection.
+- The current code only targets inference and inspection.
 - No training logic is included.
 - `seed-only` capture is the safest supported mode.
 - `per-latent-step` is implemented for the official-style CODI latent loop and falls back conservatively for generic upstream models.
@@ -122,7 +121,7 @@ The smoke test currently checks only two things:
 
 ## Note
 
-The original research-background README content is preserved below. The Stage 1 scaffold documentation above is the operational entry point for the current repository state.
+The original research-background README content is preserved below. The scaffold documentation above is the operational entry point for the current repository state.
 
 # Interpreting CODI Latent Chain-of-Thought with Step-wise Sparse Autoencoders
 

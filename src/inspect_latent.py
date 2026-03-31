@@ -4,10 +4,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from stage1.config import Stage1Config
-from stage1.io import append_jsonl, ensure_dir, save_pt, write_json
-from stage1.load_model import LoadedModelBundle, load_model_bundle
-from stage1.logging_utils import setup_logger
+from config import RunConfig
+from io_utils import append_jsonl, ensure_dir, save_pt, write_json
+from load_model import LoadedModelBundle, load_model_bundle
+from logging_utils import setup_logger
 
 
 def _require_torch() -> Any:
@@ -56,7 +56,7 @@ def _encode_question_official(bundle: LoadedModelBundle, question: str, logger: 
 
 def _capture_seed_only_official(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     sample_id: str,
     question: str,
     hidden_root: Path,
@@ -87,7 +87,7 @@ def _capture_seed_only_official(
 
 def _capture_per_latent_step_official(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     sample_id: str,
     question: str,
     hidden_root: Path,
@@ -151,7 +151,7 @@ def _capture_per_latent_step_official(
 
 def _capture_seed_only_generic(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     sample_id: str,
     question: str,
     hidden_root: Path,
@@ -187,7 +187,7 @@ def _capture_seed_only_generic(
 
 def capture_hidden_for_sample(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     sample_id: str,
     question: str,
     hidden_root: str | Path,
@@ -238,13 +238,13 @@ def capture_hidden_for_sample(
 
 
 def run_capture_only(
-    config: Stage1Config | None = None,
+    config: RunConfig | None = None,
     max_samples_override: int | None = None,
     run_name: str | None = None,
 ) -> dict[str, Any]:
-    from stage1.io import read_jsonl
+    from io_utils import read_jsonl
 
-    config = config or Stage1Config()
+    config = config or RunConfig()
     if max_samples_override is not None:
         config = config.with_overrides(max_samples=max_samples_override)
 
@@ -253,7 +253,7 @@ def run_capture_only(
     output_root = ensure_dir(config.output_root)
     run_dir = ensure_dir(output_root / effective_run_name)
     log_file = run_dir / "run.log"
-    logger = setup_logger("stage1.inspect_latent", log_file)
+    logger = setup_logger("inspect_latent", log_file)
 
     logger.info("Starting capture-only run %s.", effective_run_name)
     bundle = load_model_bundle(config=config, logger=logger)
@@ -291,7 +291,7 @@ def run_capture_only(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Capture Stage 1 CODI hidden states without running full inference.")
+    parser = argparse.ArgumentParser(description="Capture CODI hidden states without running full inference.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
     parser.add_argument("--run-name", default=None, help="Optional run name override.")
     args = parser.parse_args()

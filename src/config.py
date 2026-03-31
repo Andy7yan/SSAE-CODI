@@ -85,6 +85,3 @@ class RunConfig:
 
     def with_overrides(self, **overrides: Any) -> "RunConfig":
         return replace(self, **overrides)
-
-
-Stage1Config = RunConfig
