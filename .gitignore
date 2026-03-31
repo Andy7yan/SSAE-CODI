@@ -10,7 +10,7 @@ __pycache__/
 
 .vscode/
 
-*.log
+*.loggh 
 *.txt
 
 *.pt
