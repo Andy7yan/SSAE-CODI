@@ -1,3 +1,136 @@
+# SSAE-CODI Stage 1
+
+## Stage 1 Goal
+
+Stage 1 focuses on model setup only.
+
+The goal is to provide a minimal, auditable scaffold that can:
+
+- load the target CODI checkpoint,
+- run one minimal inference pass,
+- expose the latent-thought generation path for inspection,
+- save hidden dumps in a format that Stage 2 can reuse for hidden-state extraction and dataset building.
+
+This stage does not implement training, probes, or SSAE dataset construction yet.
+
+## Default Target
+
+- Model family: CODI
+- Default checkpoint: `zen-E/CODI-gpt2`
+- Default platform: Windows + PowerShell
+- Python target: 3.12
+
+## Project Structure
+
+```text
+.
+|-- README.md
+|-- pyproject.toml
+|-- configs/
+|   `-- codi_gpt2_stage1.yaml
+|-- data/
+|   `-- gsm8k_debug.jsonl
+|-- scripts/
+|   |-- setup_stage1.ps1
+|   |-- run_stage1_smoke.ps1
+|   `-- run_stage1_capture.ps1
+|-- src/
+|   `-- stage1/
+|       |-- config.py
+|       |-- io.py
+|       |-- inspect_latent.py
+|       |-- load_model.py
+|       |-- logging_utils.py
+|       `-- run_inference.py
+`-- tests/
+    `-- test_stage1_smoke.py
+```
+
+## Output Layout
+
+```text
+outputs/stage1/
+|-- inference/
+|   `-- <run_name>/
+|       |-- config_snapshot.yaml
+|       |-- effective_config.json
+|       |-- model_info.json
+|       |-- results.jsonl
+|       |-- run_summary.json
+|       `-- samples/
+|           `-- <sample_id>.json
+|-- hidden/
+|   `-- <run_name>/
+|       |-- capture_index.jsonl
+|       `-- <sample_id>__<capture_mode>.pt
+`-- logs/
+    `-- <run_name>.log
+```
+
+The scaffold keeps inference outputs, hidden dumps, and logs in separate directories so Stage 2 can consume them without reworking Stage 1.
+
+## Setup
+
+```powershell
+.\scripts\setup_stage1.ps1
+```
+
+If Hugging Face authentication is required:
+
+```powershell
+$env:HF_TOKEN = "your_token_here"
+```
+
+## Run
+
+Smoke test:
+
+```powershell
+.\scripts\run_stage1_smoke.ps1
+```
+
+Inference plus hidden capture:
+
+```powershell
+.\scripts\run_stage1_capture.ps1
+```
+
+Direct module usage:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path .\src).Path
+python -m stage1.run_inference --config .\configs\codi_gpt2_stage1.yaml --max-samples 1
+```
+
+## Input and Output
+
+Input data lives in `data/gsm8k_debug.jsonl`. Each line contains:
+
+- `sample_id`
+- `question`
+- `answer`
+
+Each run stores:
+
+- model name,
+- hidden size,
+- vocabulary size,
+- configured latent-step count,
+- capture mode,
+- special token or internal latent-boundary token information when accessible.
+
+## Limits
+
+- Stage 1 only targets inference and inspection.
+- No training logic is included.
+- `seed-only` capture is the safest supported mode.
+- `per-latent-step` is implemented for the official-style CODI latent loop and falls back conservatively for generic upstream models.
+- If upstream checkpoint packaging changes, the loader may need a small adapter update.
+
+## Note
+
+The original research-background README content is preserved below. The Stage 1 scaffold documentation above is the operational entry point for the current repository state.
+
 # Interpreting CODI Latent Chain-of-Thought with Step-wise Sparse Autoencoders
 
 ## Overview
