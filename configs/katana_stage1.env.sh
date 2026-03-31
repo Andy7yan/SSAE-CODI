@@ -1,5 +1,0 @@
-export REPO_ROOT="${REPO_ROOT:-$HOME/ssae-codi}"
-export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
-export SCRATCH_ROOT="${SCRATCH_ROOT:-/srv/scratch/${USER}}"
-export SSAE_CODI_OUTPUT_ROOT="${SSAE_CODI_OUTPUT_ROOT:-${SCRATCH_ROOT}/ssae-codi/runs}"
-export HF_TOKEN="${HF_TOKEN:-}"

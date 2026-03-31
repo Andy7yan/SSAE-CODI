@@ -1,8 +1,0 @@
-2026-03-31 19:11:32 | INFO | stage1.run_inference | Starting Stage 1 run: stage1_smoke
-2026-03-31 19:11:32 | INFO | stage1.run_inference | Loading config from /home/z5534565/ssae-codi/configs/codi_gpt2_stage1.yaml
-2026-03-31 19:11:45 | INFO | stage1.run_inference | Using Hugging Face token from environment variable HF_TOKEN.
-2026-03-31 19:12:03 | WARNING | stage1.run_inference | Direct Hugging Face loading failed for zen-E/CODI-gpt2. Falling back to the official CODI GPT-2 wrapper. Reason: 
- requires the protobuf library but it was not found in your environment. Check out the instructions on the
-installation page of its repo: https://github.com/protocolbuffers/protobuf/tree/master/python#installation and follow the ones
-that match your environment. Please note that you may need to restart your runtime after installation.
-

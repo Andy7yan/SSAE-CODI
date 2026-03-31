@@ -73,21 +73,23 @@ python3 -m pip install --no-index --find-links wheelhouse -r requirements-katana
 
 If Hugging Face authentication is required, export `HF_TOKEN` before running.
 
-Recommended Katana environment variables:
+Use the repo-root `.env` on Katana instead of keeping ad-hoc shell exports around:
 
 ```bash
-source configs/katana_stage1.env.sh
+set -a
+source .env
+set +a
 mkdir -p "$SSAE_CODI_OUTPUT_ROOT"
 ```
 
-The default exports are:
+The current `.env` values are:
 
 ```bash
-export REPO_ROOT="${REPO_ROOT:-$HOME/ssae-codi}"
-export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
-export SCRATCH_ROOT="${SCRATCH_ROOT:-/srv/scratch/${USER}}"
-export SSAE_CODI_OUTPUT_ROOT="${SSAE_CODI_OUTPUT_ROOT:-${SCRATCH_ROOT}/ssae-codi/runs}"
-export HF_TOKEN="${HF_TOKEN:-}"
+REPO_ROOT=/home/z5534565/ssae-codi
+PYTHONPATH=/home/z5534565/ssae-codi/src
+SCRATCH_ROOT=/srv/scratch/z5534565
+SSAE_CODI_OUTPUT_ROOT=/srv/scratch/z5534565/ssae-codi/runs
+HF_TOKEN=
 ```
 
 ## Run
