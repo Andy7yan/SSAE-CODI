@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "huggingface-hub>=0.24.0",
+  "protobuf>=5.27.0",
   "safetensors>=0.4.5",
+  "sentencepiece>=0.2.0",
   "torch>=2.4.0",
   "transformers>=4.44.0",
 ]

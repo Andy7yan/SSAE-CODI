@@ -1,6 +1,24 @@
-from dataclasses import dataclass, replace
+import os
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
+
+
+def _default_scratch_root() -> Path:
+    configured_root = os.getenv("SCRATCH_ROOT")
+    if configured_root:
+        return Path(configured_root).expanduser()
+
+    username = os.getenv("USER") or os.getenv("USERNAME") or "unknown-user"
+    return Path("/srv/scratch") / username
+
+
+def _default_output_dir() -> str:
+    configured_root = os.getenv("SSAE_CODI_OUTPUT_ROOT")
+    if configured_root:
+        return configured_root
+    return (_default_scratch_root() / "ssae-codi" / "runs").as_posix()
+
 
 @dataclass(slots=True)
 class Stage1Config:
@@ -10,7 +28,7 @@ class Stage1Config:
     dtype: str = "float32"
     num_latent: int = 6
     inf_latent_iterations: int = 6
-    output_dir: str = "outputs/stage1"
+    output_dir: str = field(default_factory=_default_output_dir)
     capture_hidden: bool = False
     capture_mode: str = "seed-only"
     target_layer_index: int = -1
@@ -46,6 +64,10 @@ class Stage1Config:
     @property
     def repo_root(self) -> Path:
         return Path(__file__).resolve().parents[2]
+
+    @property
+    def scratch_root(self) -> Path:
+        return _default_scratch_root()
 
     @property
     def output_root(self) -> Path:

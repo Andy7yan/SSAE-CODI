@@ -176,11 +176,19 @@ def _build_test_config(tmp_path: Path, capture_hidden: bool, capture_mode: str) 
     )
 
 
-def test_config_can_load() -> None:
+def test_config_can_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("SSAE_CODI_OUTPUT_ROOT", raising=False)
     config = Stage1Config()
     assert config.model_name_or_path == "zen-E/CODI-gpt2"
     assert config.capture_mode == "seed-only"
     assert config.inf_latent_iterations == 6
+    assert config.output_dir.endswith("/ssae-codi/runs")
+
+
+def test_config_prefers_explicit_output_root_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SSAE_CODI_OUTPUT_ROOT", "/srv/scratch/test-user/ssae-codi/custom-runs")
+    config = Stage1Config()
+    assert config.output_dir == "/srv/scratch/test-user/ssae-codi/custom-runs"
 
 
 def test_model_can_load(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,7 +206,7 @@ def test_one_sample_can_run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setattr("stage1.run_inference.load_model_bundle", lambda config, logger=None: fake_bundle)
 
     summary = run_stage1(config=config, run_name="pytest_smoke")
-    results_path = Path(summary["inference_dir"]) / "results.jsonl"
+    results_path = Path(summary["run_dir"]) / "results.jsonl"
 
     assert results_path.exists()
     results_text = results_path.read_text(encoding="utf-8")
@@ -215,7 +223,7 @@ def test_one_hidden_output_file_can_be_created_in_seed_only_mode(
     monkeypatch.setattr("stage1.run_inference.load_model_bundle", lambda config, logger=None: fake_bundle)
 
     summary = run_stage1(config=config, run_name="pytest_capture")
-    hidden_dir = Path(summary["hidden_dir"])
+    hidden_dir = Path(summary["run_dir"])
     hidden_files = list(hidden_dir.glob("*.pt"))
 
     assert len(hidden_files) == 1

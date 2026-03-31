@@ -43,32 +43,52 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 ## Output Layout
 
 ```text
-outputs/stage1/
-|-- inference/
-|   `-- <run_name>/
-|       |-- effective_config.json
-|       |-- model_info.json
-|       |-- results.jsonl
-|       |-- run_summary.json
-|       `-- samples/
-|           `-- <sample_id>.json
-|-- hidden/
-|   `-- <run_name>/
-|       |-- capture_index.jsonl
-|       `-- <sample_id>__<capture_mode>.pt
-`-- logs/
-    `-- <run_name>.log
+/srv/scratch/$USER/ssae-codi/runs/
+`-- <run_name>/
+    |-- effective_config.json
+    |-- model_info.json
+    |-- results.jsonl
+    |-- run_summary.json
+    |-- run.log
+    |-- capture_index.jsonl
+    |-- <sample_id>.json
+    `-- <sample_id>__<capture_mode>.pt
 ```
 
-The scaffold keeps inference outputs, hidden dumps, and logs in separate directories so they stay inspectable without adding much project overhead.
+The default Stage 1 output root is now Katana-oriented and flat. Everything for one run lives under one run directory instead of being split across `inference/`, `hidden/`, and `logs/`.
 
 ## Setup
 
 ```bash
+python3 -m pip install -r requirements-katana.txt
 python3 -m pip install -e .
 ```
 
+If you need to pre-download wheels on another machine, use:
+
+```bash
+python3 -m pip download -r requirements-katana.txt -d wheelhouse
+python3 -m pip install --no-index --find-links wheelhouse -r requirements-katana.txt
+```
+
 If Hugging Face authentication is required, export `HF_TOKEN` before running.
+
+Recommended Katana environment variables:
+
+```bash
+source configs/katana_stage1.env.sh
+mkdir -p "$SSAE_CODI_OUTPUT_ROOT"
+```
+
+The default exports are:
+
+```bash
+export REPO_ROOT="${REPO_ROOT:-$HOME/ssae-codi}"
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+export SCRATCH_ROOT="${SCRATCH_ROOT:-/srv/scratch/${USER}}"
+export SSAE_CODI_OUTPUT_ROOT="${SSAE_CODI_OUTPUT_ROOT:-${SCRATCH_ROOT}/ssae-codi/runs}"
+export HF_TOKEN="${HF_TOKEN:-}"
+```
 
 ## Run
 
@@ -76,14 +96,16 @@ Smoke test:
 
 ```bash
 export PYTHONPATH=/path/to/repo/src
-python3 -m stage1.run_inference --max-samples 1 --no-capture-hidden --run-name stage1_smoke
+export SSAE_CODI_OUTPUT_ROOT=/srv/scratch/$USER/ssae-codi/runs
+python3 -m stage1.run_inference --max-samples 1 --no-capture-hidden --run-name smoke_$(date +%Y%m%d_%H%M%S)
 ```
 
 Inference plus hidden capture:
 
 ```bash
 export PYTHONPATH=/path/to/repo/src
-python3 -m stage1.run_inference --capture-hidden --capture-mode per-latent-step --run-name stage1_capture
+export SSAE_CODI_OUTPUT_ROOT=/srv/scratch/$USER/ssae-codi/runs
+python3 -m stage1.run_inference --capture-hidden --capture-mode per-latent-step --run-name capture_$(date +%Y%m%d_%H%M%S)
 ```
 
 Direct module usage:

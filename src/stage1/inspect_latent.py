@@ -251,8 +251,8 @@ def run_capture_only(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     effective_run_name = run_name or f"capture_{timestamp}"
     output_root = ensure_dir(config.output_root)
-    hidden_dir = ensure_dir(output_root / "hidden" / effective_run_name)
-    log_file = output_root / "logs" / f"{effective_run_name}.log"
+    run_dir = ensure_dir(output_root / effective_run_name)
+    log_file = run_dir / "run.log"
     logger = setup_logger("stage1.inspect_latent", log_file)
 
     logger.info("Starting capture-only run %s.", effective_run_name)
@@ -269,7 +269,7 @@ def run_capture_only(
             config=config,
             sample_id=sample_id,
             question=question,
-            hidden_root=hidden_dir,
+            hidden_root=run_dir,
             logger=logger,
         )
         record["elapsed_seconds"] = round(time.perf_counter() - started, 6)
@@ -280,10 +280,12 @@ def run_capture_only(
         "run_name": effective_run_name,
         "capture_mode": config.capture_mode,
         "sample_count": len(capture_records),
-        "hidden_dir": str(hidden_dir.resolve()),
+        "output_root": str(output_root.resolve()),
+        "run_dir": str(run_dir.resolve()),
+        "hidden_dir": str(run_dir.resolve()),
         "log_file": str(log_file.resolve()),
     }
-    write_json(hidden_dir / "capture_summary.json", summary)
+    write_json(run_dir / "capture_summary.json", summary)
     logger.info("Capture-only run complete. Summary: %s", summary)
     return summary
 

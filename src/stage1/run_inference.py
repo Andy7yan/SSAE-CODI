@@ -2,6 +2,7 @@ import argparse
 import random
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from stage1.config import Stage1Config
@@ -200,17 +201,14 @@ def run_single_sample(
 
 def _create_run_layout(config: Stage1Config, run_name: str) -> dict[str, Path]:
     output_root = ensure_dir(config.output_root)
-    inference_dir = ensure_dir(output_root / "inference" / run_name)
-    hidden_dir = ensure_dir(output_root / "hidden" / run_name)
-    samples_dir = ensure_dir(inference_dir / "samples")
-    logs_dir = ensure_dir(output_root / "logs")
+    run_dir = ensure_dir(output_root / run_name)
 
     return {
         "output_root": output_root,
-        "inference_dir": inference_dir,
-        "hidden_dir": hidden_dir,
-        "samples_dir": samples_dir,
-        "log_file": logs_dir / f"{run_name}.log",
+        "run_dir": run_dir,
+        "inference_dir": run_dir,
+        "hidden_dir": run_dir,
+        "log_file": run_dir / "run.log",
     }
 
 
@@ -245,8 +243,8 @@ def run_stage1(
 
     bundle = load_model_bundle(config=config, logger=logger)
 
-    write_json(run_layout["inference_dir"] / "effective_config.json", config.to_dict())
-    write_json(run_layout["inference_dir"] / "model_info.json", bundle.model_info)
+    write_json(run_layout["run_dir"] / "effective_config.json", config.to_dict())
+    write_json(run_layout["run_dir"] / "model_info.json", bundle.model_info)
 
     samples = read_jsonl(config.data_file)[: config.max_samples]
     logger.info("Loaded %s debug sample(s) from %s.", len(samples), config.data_file.resolve())
@@ -291,7 +289,7 @@ def run_stage1(
         }
         result_rows.append(sample_record)
 
-        write_json(run_layout["samples_dir"] / f"{sample_id}.json", sample_record)
+        write_json(run_layout["run_dir"] / f"{sample_id}.json", sample_record)
         logger.info(
             "Completed sample %s in %.3fs. Generated text: %s",
             sample_id,
@@ -299,7 +297,7 @@ def run_stage1(
             sample_record["generated_text"],
         )
 
-    write_jsonl(run_layout["inference_dir"] / "results.jsonl", result_rows)
+    write_jsonl(run_layout["run_dir"] / "results.jsonl", result_rows)
 
     summary = {
         "run_name": effective_run_name,
@@ -308,11 +306,13 @@ def run_stage1(
         "backend": bundle.backend,
         "capture_hidden": config.capture_hidden,
         "capture_mode": config.capture_mode if config.capture_hidden else None,
-        "inference_dir": str(run_layout["inference_dir"].resolve()),
-        "hidden_dir": str(run_layout["hidden_dir"].resolve()),
+        "output_root": str(run_layout["output_root"].resolve()),
+        "run_dir": str(run_layout["run_dir"].resolve()),
+        "inference_dir": str(run_layout["run_dir"].resolve()),
+        "hidden_dir": str(run_layout["run_dir"].resolve()),
         "log_file": str(run_layout["log_file"].resolve()),
     }
-    write_json(run_layout["inference_dir"] / "run_summary.json", summary)
+    write_json(run_layout["run_dir"] / "run_summary.json", summary)
     logger.info("Stage 1 run finished. Summary: %s", summary)
     return summary
 
