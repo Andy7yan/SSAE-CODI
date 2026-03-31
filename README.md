@@ -25,7 +25,9 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 ```text
 .
 |-- README.md
+|-- .env
 |-- pyproject.toml
+|-- requirements-katana.txt
 |-- data/
 |   `-- gsm8k_debug.jsonl
 |-- src/
@@ -37,25 +39,22 @@ This stage does not implement training, probes, or SSAE dataset construction yet
 |       |-- logging_utils.py
 |       `-- run_inference.py
 `-- tests/
-    `-- test_stage1_smoke.py
+    `-- test_smoke.py
 ```
 
 ## Output Layout
 
 ```text
-/srv/scratch/$USER/ssae-codi/runs/
-`-- <run_name>/
-    |-- effective_config.json
-    |-- model_info.json
-    |-- results.jsonl
-    |-- run_summary.json
-    |-- run.log
-    |-- capture_index.jsonl
-    |-- <sample_id>.json
-    `-- <sample_id>__<capture_mode>.pt
+/srv/scratch/z5534565/ssae-codi/
+|-- hf-home/
+|   |-- hub/
+|   |-- datasets/
+|   `-- saved-datasets/
+`-- smoke/
+    `-- smoke_summary.json
 ```
 
-The default Stage 1 output root is now Katana-oriented and flat. Everything for one run lives under one run directory instead of being split across `inference/`, `hidden/`, and `logs/`.
+The active Katana entry point is now the smoke test in `tests/test_smoke.py`. It caches model and dataset artifacts under `HF_HOME` and writes a single smoke summary JSON under `SMOKE_OUTPUT_ROOT`.
 
 ## Setup
 
@@ -79,17 +78,20 @@ Use the repo-root `.env` on Katana instead of keeping ad-hoc shell exports aroun
 set -a
 source .env
 set +a
-mkdir -p "$SSAE_CODI_OUTPUT_ROOT"
+mkdir -p "$HF_HOME" "$SMOKE_OUTPUT_ROOT"
 ```
 
 The current `.env` values are:
 
 ```bash
-REPO_ROOT=/home/z5534565/ssae-codi
-PYTHONPATH=/home/z5534565/ssae-codi/src
-SCRATCH_ROOT=/srv/scratch/z5534565
-SSAE_CODI_OUTPUT_ROOT=/srv/scratch/z5534565/ssae-codi/runs
 HF_TOKEN=
+HF_HOME=/srv/scratch/z5534565/ssae-codi/hf-home
+HF_HUB_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/hub
+HF_DATASETS_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/datasets
+SMOKE_OUTPUT_ROOT=/srv/scratch/z5534565/ssae-codi/smoke
+MODEL_REPO=zen-E/CODI-gpt2
+DATASET_REPO=openai/gsm8k
+DATASET_CONFIG=main
 ```
 
 ## Run
@@ -97,42 +99,18 @@ HF_TOKEN=
 Smoke test:
 
 ```bash
-export PYTHONPATH=/path/to/repo/src
-export SSAE_CODI_OUTPUT_ROOT=/srv/scratch/$USER/ssae-codi/runs
-python3 -m stage1.run_inference --max-samples 1 --no-capture-hidden --run-name smoke_$(date +%Y%m%d_%H%M%S)
+set -a
+source .env
+set +a
+torchrun tests/test_smoke.py
 ```
 
-Inference plus hidden capture:
+## Smoke Coverage
 
-```bash
-export PYTHONPATH=/path/to/repo/src
-export SSAE_CODI_OUTPUT_ROOT=/srv/scratch/$USER/ssae-codi/runs
-python3 -m stage1.run_inference --capture-hidden --capture-mode per-latent-step --run-name capture_$(date +%Y%m%d_%H%M%S)
-```
+The smoke test currently checks only two things:
 
-Direct module usage:
-
-```bash
-export PYTHONPATH=/path/to/repo/src
-python3 -m stage1.run_inference --max-samples 1
-```
-
-## Input and Output
-
-Input data lives in `data/gsm8k_debug.jsonl`. Each line contains:
-
-- `sample_id`
-- `question`
-- `answer`
-
-Each run stores:
-
-- model name,
-- hidden size,
-- vocabulary size,
-- configured latent-step count,
-- capture mode,
-- special token or internal latent-boundary token information when accessible.
+- the CODI repository can be resolved and cached from Hugging Face under `HF_HOME`;
+- the GSM8K dataset can be downloaded once, saved under `HF_HOME/saved-datasets`, and reused on later runs without re-downloading.
 
 ## Limits
 
