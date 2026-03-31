@@ -5,18 +5,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from stage1.config import Stage1Config
-from stage1.inspect_latent import capture_hidden_for_sample
-from stage1.io import ensure_dir, read_jsonl, write_json, write_jsonl
-from stage1.load_model import LoadedModelBundle, load_model_bundle
-from stage1.logging_utils import setup_logger
+from config import RunConfig
+from inspect_latent import capture_hidden_for_sample
+from io_utils import ensure_dir, read_jsonl, write_json, write_jsonl
+from load_model import LoadedModelBundle, load_model_bundle
+from logging_utils import setup_logger
 
 
 def _require_torch() -> Any:
     try:
         import torch  # type: ignore
     except ImportError as exc:
-        raise RuntimeError("PyTorch is required for Stage 1 inference.") from exc
+        raise RuntimeError("PyTorch is required for CODI inference.") from exc
     return torch
 
 
@@ -42,7 +42,7 @@ def _build_prompt(bundle: LoadedModelBundle, question: str) -> str:
     return question
 
 
-def _sample_next_token(logits: Any, config: Stage1Config) -> Any:
+def _sample_next_token(logits: Any, config: RunConfig) -> Any:
     torch = _require_torch()
     if not config.do_sample or config.temperature <= 0.0:
         return torch.argmax(logits, dim=-1)
@@ -64,7 +64,7 @@ def _sample_next_token(logits: Any, config: Stage1Config) -> Any:
 
 def _run_official_codi_inference(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     question: str,
 ) -> dict[str, Any]:
     torch = _require_torch()
@@ -149,7 +149,7 @@ def _run_official_codi_inference(
 
 def _run_generic_inference(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     prompt: str,
 ) -> dict[str, Any]:
     tokenizer = bundle.tokenizer
@@ -187,7 +187,7 @@ def _run_generic_inference(
 
 def run_single_sample(
     bundle: LoadedModelBundle,
-    config: Stage1Config,
+    config: RunConfig,
     question: str,
 ) -> dict[str, Any]:
     prompt = _build_prompt(bundle=bundle, question=question)
@@ -199,7 +199,7 @@ def run_single_sample(
     return result
 
 
-def _create_run_layout(config: Stage1Config, run_name: str) -> dict[str, Path]:
+def _create_run_layout(config: RunConfig, run_name: str) -> dict[str, Path]:
     output_root = ensure_dir(config.output_root)
     run_dir = ensure_dir(output_root / run_name)
 
@@ -212,15 +212,15 @@ def _create_run_layout(config: Stage1Config, run_name: str) -> dict[str, Path]:
     }
 
 
-def run_stage1(
-    config: Stage1Config | None = None,
+def run_inference_job(
+    config: RunConfig | None = None,
     max_samples_override: int | None = None,
     output_dir_override: str | None = None,
     capture_hidden_override: bool | None = None,
     capture_mode_override: str | None = None,
     run_name: str | None = None,
 ) -> dict[str, Any]:
-    config = config or Stage1Config()
+    config = config or RunConfig()
     overrides: dict[str, Any] = {}
     if max_samples_override is not None:
         overrides["max_samples"] = max_samples_override
@@ -234,11 +234,11 @@ def run_stage1(
         config = config.with_overrides(**overrides)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    effective_run_name = run_name or f"stage1_{timestamp}"
+    effective_run_name = run_name or f"run_{timestamp}"
     run_layout = _create_run_layout(config=config, run_name=effective_run_name)
-    logger = setup_logger("stage1.run_inference", run_layout["log_file"])
+    logger = setup_logger("run_inference", run_layout["log_file"])
 
-    logger.info("Starting Stage 1 run: %s", effective_run_name)
+    logger.info("Starting inference run: %s", effective_run_name)
     _set_seed(config.seed)
 
     bundle = load_model_bundle(config=config, logger=logger)
@@ -313,12 +313,15 @@ def run_stage1(
         "log_file": str(run_layout["log_file"].resolve()),
     }
     write_json(run_layout["run_dir"] / "run_summary.json", summary)
-    logger.info("Stage 1 run finished. Summary: %s", summary)
+    logger.info("Inference run finished. Summary: %s", summary)
     return summary
 
 
+run_stage1 = run_inference_job
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Stage 1 CODI inference and optional hidden capture.")
+    parser = argparse.ArgumentParser(description="Run CODI inference and optional hidden capture.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
     parser.add_argument("--output-dir", default=None, help="Optional output directory override.")
     parser.add_argument("--capture-hidden", action="store_true", help="Force hidden capture on.")
@@ -341,7 +344,7 @@ def main() -> None:
     elif args.no_capture_hidden:
         capture_hidden_override = False
 
-    run_stage1(
+    run_inference_job(
         max_samples_override=args.max_samples,
         output_dir_override=args.output_dir,
         capture_hidden_override=capture_hidden_override,

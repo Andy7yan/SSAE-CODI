@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from stage1.io import ensure_dir
+from io_utils import ensure_dir
 
 
 def setup_logger(name: str, log_file: str | Path, level: int = logging.INFO) -> logging.Logger:

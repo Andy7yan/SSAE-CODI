@@ -3,11 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from stage1.config import Stage1Config
+from config import RunConfig
 
 
 class ModelLoadError(RuntimeError):
-    """Raised when Stage 1 cannot construct a usable model bundle."""
+    """Raised when CODI loading cannot construct a usable model bundle."""
 
 
 @dataclass(slots=True)
@@ -33,9 +33,7 @@ def _require_torch() -> Any:
     try:
         import torch  # type: ignore
     except ImportError as exc:
-        raise ModelLoadError(
-            "PyTorch is required for Stage 1 model loading. Install Stage 1 dependencies first."
-        ) from exc
+        raise ModelLoadError("PyTorch is required for CODI model loading.") from exc
     return torch
 
 
@@ -81,7 +79,7 @@ def _load_tokenizer(tokenizer_name: str, token: str | None, trust_remote_code: b
     )
 
 
-def _load_direct_hf_bundle(config: Stage1Config, token: str | None, logger: Any | None = None) -> LoadedModelBundle:
+def _load_direct_hf_bundle(config: RunConfig, token: str | None, logger: Any | None = None) -> LoadedModelBundle:
     torch = _require_torch()
     from transformers import AutoModelForCausalLM  # type: ignore
 
@@ -100,11 +98,16 @@ def _load_direct_hf_bundle(config: Stage1Config, token: str | None, logger: Any 
         else:
             tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
+    model_load_kwargs = {
+        "token": token,
+        "trust_remote_code": config.trust_remote_code,
+    }
+    if resolved_dtype is not None:
+        model_load_kwargs["dtype"] = resolved_dtype
+
     model = AutoModelForCausalLM.from_pretrained(
         config.model_name_or_path,
-        token=token,
-        trust_remote_code=config.trust_remote_code,
-        torch_dtype=resolved_dtype,
+        **model_load_kwargs,
     )
     model = model.to(resolved_device)
     model.eval()
@@ -196,7 +199,7 @@ def _infer_projection_spec(state_dict: dict[str, Any], hidden_size: int) -> tupl
 
 
 def _build_official_codi_gpt2_bundle(
-    config: Stage1Config,
+    config: RunConfig,
     token: str | None,
     logger: Any | None = None,
 ) -> LoadedModelBundle:
@@ -210,11 +213,16 @@ def _build_official_codi_gpt2_bundle(
     checkpoint_file, _checkpoint_source = _resolve_checkpoint_file(config.model_name_or_path, token)
     state_dict = _load_state_dict(checkpoint_file)
 
+    base_model_load_kwargs = {
+        "token": token,
+        "trust_remote_code": config.trust_remote_code,
+    }
+    if resolved_dtype is not None:
+        base_model_load_kwargs["dtype"] = resolved_dtype
+
     base_model = AutoModelForCausalLM.from_pretrained(
         base_model_name,
-        token=token,
-        trust_remote_code=config.trust_remote_code,
-        torch_dtype=resolved_dtype,
+        **base_model_load_kwargs,
     )
     tokenizer = _load_tokenizer(
         tokenizer_name=base_model_name,
@@ -294,7 +302,7 @@ def _build_official_codi_gpt2_bundle(
 def _collect_model_info(
     model: Any,
     tokenizer: Any,
-    config: Stage1Config,
+    config: RunConfig,
     backend: str,
     base_model_name: str,
     checkpoint_source: str,
@@ -366,7 +374,7 @@ def _log_model_info(bundle: LoadedModelBundle, logger: Any | None = None) -> Non
         logger.info(line)
 
 
-def load_model_bundle(config: Stage1Config, logger: Any | None = None) -> LoadedModelBundle:
+def load_model_bundle(config: RunConfig, logger: Any | None = None) -> LoadedModelBundle:
     os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
     token = _resolve_auth_token(config.hf_token_env_var)
     if logger is not None:

@@ -21,7 +21,7 @@ def _default_output_dir() -> str:
 
 
 @dataclass(slots=True)
-class Stage1Config:
+class RunConfig:
     model_name_or_path: str = "zen-E/CODI-gpt2"
     hf_token_env_var: str = "HF_TOKEN"
     device: str = "auto"
@@ -63,7 +63,7 @@ class Stage1Config:
 
     @property
     def repo_root(self) -> Path:
-        return Path(__file__).resolve().parents[2]
+        return Path(__file__).resolve().parents[1]
 
     @property
     def scratch_root(self) -> Path:
@@ -83,5 +83,8 @@ class Stage1Config:
         field_names = tuple(self.__dataclass_fields__.keys())
         return {field_name: getattr(self, field_name) for field_name in field_names}
 
-    def with_overrides(self, **overrides: Any) -> "Stage1Config":
+    def with_overrides(self, **overrides: Any) -> "RunConfig":
         return replace(self, **overrides)
+
+
+Stage1Config = RunConfig
