@@ -50,8 +50,8 @@ class RunConfig:
             raise ValueError("num_latent must be non-negative.")
         if self.inf_latent_iterations < 0:
             raise ValueError("inf_latent_iterations must be non-negative.")
-        if self.max_samples <= 0:
-            raise ValueError("max_samples must be greater than zero.")
+        if self.max_samples == 0 or self.max_samples < -1:
+            raise ValueError("max_samples must be > 0 or -1 (no limit).")
         if self.max_new_tokens <= 0:
             raise ValueError("max_new_tokens must be greater than zero.")
         if self.capture_mode not in {"seed-only", "per-latent-step"}:

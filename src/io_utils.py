@@ -1,7 +1,7 @@
 import json
 import pickle
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 def ensure_dir(path: str | Path) -> Path:
@@ -83,3 +83,38 @@ def load_pt(path: str | Path) -> Any:
             return pickle.load(handle)
 
     return torch.load(input_path, map_location="cpu")
+
+
+def save_safetensors(path: str | Path, tensors: Mapping[str, Any]) -> Path:
+    """Save a dict of tensors to a safetensors file.
+
+    Args:
+        path: Output file path (should end in .safetensors).
+        tensors: Mapping of key -> torch.Tensor.
+
+    Returns:
+        Resolved output path.
+    """
+    import torch  # type: ignore
+    from safetensors.torch import save_file  # type: ignore
+
+    output_path = Path(path)
+    ensure_dir(output_path.parent)
+    # safetensors requires contiguous float tensors; cast if needed.
+    contiguous = {k: v.contiguous() if isinstance(v, torch.Tensor) else v for k, v in tensors.items()}
+    save_file(contiguous, str(output_path))
+    return output_path
+
+
+def load_safetensors(path: str | Path) -> dict[str, Any]:
+    """Load tensors from a safetensors file.
+
+    Args:
+        path: Path to a .safetensors file.
+
+    Returns:
+        Dict of key -> torch.Tensor (on CPU).
+    """
+    from safetensors.torch import load_file  # type: ignore
+
+    return load_file(str(Path(path)), device="cpu")

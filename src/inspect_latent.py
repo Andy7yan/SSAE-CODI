@@ -1,13 +1,31 @@
 import argparse
+import os
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from config import RunConfig
-from io_utils import append_jsonl, ensure_dir, save_pt, write_json
+from io_utils import append_jsonl, ensure_dir, save_safetensors, write_json
 from load_model import LoadedModelBundle, load_model_bundle
 from logging_utils import setup_logger
+
+
+def _load_repo_dotenv() -> None:
+    """Load key=value pairs from repo .env if present without overriding existing env vars."""
+    dotenv_path = Path(__file__).resolve().parents[1] / ".env"
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip("\"").strip("'")
 
 
 def _require_torch() -> Any:
@@ -79,8 +97,8 @@ def _capture_seed_only_official(
         "capture_status": "ok",
     }
 
-    output_path = hidden_root / f"{sample_id}__seed-only.pt"
-    save_pt(output_path, {"hidden": hidden, "metadata": metadata})
+    output_path = hidden_root / f"{sample_id}__seed-only.safetensors"
+    save_safetensors(output_path, {"hidden": hidden})
     append_jsonl(hidden_root / "capture_index.jsonl", metadata | {"tensor_path": str(output_path.resolve())})
     return metadata | {"tensor_path": str(output_path.resolve())}
 
@@ -143,8 +161,8 @@ def _capture_per_latent_step_official(
         "capture_status": "ok",
     }
 
-    output_path = hidden_root / f"{sample_id}__per-latent-step.pt"
-    save_pt(output_path, {"hidden": trajectory, "metadata": metadata})
+    output_path = hidden_root / f"{sample_id}__per-latent-step.safetensors"
+    save_safetensors(output_path, {"hidden": trajectory})
     append_jsonl(hidden_root / "capture_index.jsonl", metadata | {"tensor_path": str(output_path.resolve())})
     return metadata | {"tensor_path": str(output_path.resolve())}
 
@@ -179,8 +197,8 @@ def _capture_seed_only_generic(
         "capture_status": "ok",
     }
 
-    output_path = hidden_root / f"{sample_id}__seed-only.pt"
-    save_pt(output_path, {"hidden": hidden, "metadata": metadata})
+    output_path = hidden_root / f"{sample_id}__seed-only.safetensors"
+    save_safetensors(output_path, {"hidden": hidden})
     append_jsonl(hidden_root / "capture_index.jsonl", metadata | {"tensor_path": str(output_path.resolve())})
     return metadata | {"tensor_path": str(output_path.resolve())}
 
@@ -291,6 +309,8 @@ def run_capture_only(
 
 
 def main() -> None:
+    _load_repo_dotenv()
+
     parser = argparse.ArgumentParser(description="Capture CODI hidden states without running full inference.")
     parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
     parser.add_argument("--run-name", default=None, help="Optional run name override.")

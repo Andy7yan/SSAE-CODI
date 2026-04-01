@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import time
 from datetime import datetime
@@ -10,6 +11,23 @@ from inspect_latent import capture_hidden_for_sample
 from io_utils import ensure_dir, read_jsonl, write_json, write_jsonl
 from load_model import LoadedModelBundle, load_model_bundle
 from logging_utils import setup_logger
+
+
+def _load_repo_dotenv() -> None:
+    """Load key=value pairs from repo .env if present without overriding existing env vars."""
+    dotenv_path = Path(__file__).resolve().parents[1] / ".env"
+    if not dotenv_path.exists():
+        return
+
+    for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = value.strip().strip("\"").strip("'")
 
 
 def _require_torch() -> Any:
@@ -216,6 +234,7 @@ def run_inference_job(
     config: RunConfig | None = None,
     max_samples_override: int | None = None,
     output_dir_override: str | None = None,
+    data_path_override: str | None = None,
     capture_hidden_override: bool | None = None,
     capture_mode_override: str | None = None,
     run_name: str | None = None,
@@ -226,6 +245,8 @@ def run_inference_job(
         overrides["max_samples"] = max_samples_override
     if output_dir_override is not None:
         overrides["output_dir"] = output_dir_override
+    if data_path_override is not None:
+        overrides["data_path"] = data_path_override
     if capture_hidden_override is not None:
         overrides["capture_hidden"] = capture_hidden_override
     if capture_mode_override is not None:
@@ -246,8 +267,9 @@ def run_inference_job(
     write_json(run_layout["run_dir"] / "effective_config.json", config.to_dict())
     write_json(run_layout["run_dir"] / "model_info.json", bundle.model_info)
 
-    samples = read_jsonl(config.data_file)[: config.max_samples]
-    logger.info("Loaded %s debug sample(s) from %s.", len(samples), config.data_file.resolve())
+    all_samples = read_jsonl(config.data_file)
+    samples = all_samples if config.max_samples == -1 else all_samples[: config.max_samples]
+    logger.info("Loaded %d sample(s) from %s.", len(samples), config.data_file.resolve())
 
     result_rows: list[dict[str, Any]] = []
     for sample in samples:
@@ -316,8 +338,11 @@ def run_inference_job(
     logger.info("Inference run finished. Summary: %s", summary)
     return summary
 def main() -> None:
+    _load_repo_dotenv()
+
     parser = argparse.ArgumentParser(description="Run CODI inference and optional hidden capture.")
-    parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override.")
+    parser.add_argument("--max-samples", type=int, default=None, help="Optional max sample override (-1 = all).")
+    parser.add_argument("--data-path", default=None, help="Optional data file override (JSONL).")
     parser.add_argument("--output-dir", default=None, help="Optional output directory override.")
     parser.add_argument("--capture-hidden", action="store_true", help="Force hidden capture on.")
     parser.add_argument("--no-capture-hidden", action="store_true", help="Force hidden capture off.")
@@ -342,6 +367,7 @@ def main() -> None:
     run_inference_job(
         max_samples_override=args.max_samples,
         output_dir_override=args.output_dir,
+        data_path_override=args.data_path,
         capture_hidden_override=capture_hidden_override,
         capture_mode_override=args.capture_mode,
         run_name=args.run_name,

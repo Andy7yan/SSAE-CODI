@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -N ssae_train
+#PBS -l select=1:ncpus=8:ngpus=1:mem=32gb
+#PBS -l walltime=08:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/${USER}/ssae-codi/runs/sae-train/logs/train_sae.log
+
+# Required env vars (set before qsub, or edit below):
+#   DATASET_DIR  -- path to aggregated dataset (contains train.safetensors, meta.json)
+#   RUN_NAME     -- human-readable run identifier
+
+cd /home/ssae-codi
+
+module load python/3.12.10
+source .venv/bin/activate
+
+export HF_HOME=/srv/scratch/${USER}/ssae-codi/hf-home
+
+: "${DATASET_DIR:=/srv/scratch/${USER}/ssae-codi/datasets/gsm8k-latents-v1}"
+: "${RUN_NAME:=sae-train-$(date +%Y%m%d_%H%M%S)}"
+
+RUN_DIR=/srv/scratch/${USER}/ssae-codi/runs/${RUN_NAME}
+mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
+
+python src/train_sae.py \
+    --dataset-dir "${DATASET_DIR}" \
+    --output-dir  "${RUN_DIR}" \
+    --n-steps 7 \
+    --d-sae 3072 \
+    --k 32 \
+    --lr 1e-4 \
+    --epochs 10 \
+    --batch-size 64 \
+    --device auto

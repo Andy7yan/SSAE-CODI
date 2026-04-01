@@ -1,0 +1,48 @@
+#!/bin/bash
+#PBS -N codi_latent_gen
+#PBS -l select=1:ncpus=4:ngpus=1:mem=16gb
+#PBS -l walltime=04:00:00
+#PBS -j oe
+#PBS -o /srv/scratch/${USER}/ssae-codi/logs/latent_gen.log
+
+cd /home/ssae-codi
+
+module load python/3.12.10
+source .venv/bin/activate
+
+export HF_HOME=/srv/scratch/${USER}/ssae-codi/hf-home
+export HF_HUB_CACHE=${HF_HOME}/hub
+export HF_DATASETS_CACHE=${HF_HOME}/datasets
+
+# --- configurable parameters ---
+# Dataset: standard GSM8K train split for latent generation.
+# To use GSM8K-Aug, set DATASET_REPO and DATASET_CONFIG to the correct HF repo.
+: "${DATASET_REPO:=openai/gsm8k}"
+: "${DATASET_CONFIG:=main}"
+: "${DATASET_SPLIT:=train}"
+
+DATA_DIR=/srv/scratch/${USER}/ssae-codi/data
+DATA_FILE=${DATA_DIR}/gsm8k_${DATASET_SPLIT}.jsonl
+mkdir -p "${DATA_DIR}"
+
+# Step 1: Export dataset to JSONL (idempotent — overwrites if re-run).
+python src/prepare_data.py \
+    --repo "${DATASET_REPO}" \
+    --config "${DATASET_CONFIG}" \
+    --split "${DATASET_SPLIT}" \
+    --output "${DATA_FILE}"
+
+# Step 2: Run CODI inference with per-latent-step hidden capture.
+RUN_NAME=latent-gen-$(date +%Y%m%d_%H%M%S)
+RUN_DIR=/srv/scratch/${USER}/ssae-codi/runs/${RUN_NAME}
+mkdir -p "${RUN_DIR}/logs" "${RUN_DIR}/checkpoints" "${RUN_DIR}/weights"
+
+python src/run_inference.py \
+    --capture-hidden \
+    --capture-mode per-latent-step \
+    --max-samples -1 \
+    --data-path "${DATA_FILE}" \
+    --output-dir "${RUN_DIR}" \
+    --run-name "${RUN_NAME}"
+
+echo "Run complete: ${RUN_DIR}"

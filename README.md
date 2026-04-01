@@ -17,8 +17,25 @@ This scaffold does not implement training, probes, or SSAE dataset construction 
 
 - Model family: CODI
 - Default checkpoint: `zen-E/CODI-gpt2`
+- Paper-aligned dataset: `zen-E/GSM8k-Aug`
 - Default platform: Katana + Linux
 - Python target: 3.10
+
+## Dataset Source Of Truth
+
+Use this section as the canonical dataset reference for this repo.
+
+- `zen-E/CODI-gpt2` is trained with `zen-E/GSM8k-Aug` (model card metadata).
+- For paper-aligned runs, use `zen-E/GSM8k-Aug` as the primary dataset.
+- Raw sample schema in `zen-E/GSM8k-Aug` is `question`, `cot`, `answer`.
+- The raw dataset does not provide a standalone `step` column.
+- Step-wise signals in this project refer to model-internal latent trajectories captured during inference/inspection, not a native dataset field.
+- `openai/gsm8k` may still be used for quick connectivity/smoke checks, but it is not the paper-aligned source for CODI.
+
+References:
+
+- https://huggingface.co/zen-E/CODI-gpt2
+- https://huggingface.co/datasets/zen-E/GSM8k-Aug
 
 ## Project Structure
 
@@ -69,18 +86,11 @@ python3 -m pip download -r requirements-katana.txt -d wheelhouse
 python3 -m pip install --no-index --find-links wheelhouse -r requirements-katana.txt
 ```
 
-If Hugging Face authentication is required, export `HF_TOKEN` before running.
+If Hugging Face authentication is required, set `HF_TOKEN` in repo-root `.env` before running.
 
-Use the repo-root `.env` on Katana instead of keeping ad-hoc shell exports around:
+All runtime parameters should be stored in repo-root `.env`. Entry scripts now auto-load `.env` at startup, so no `export` block is required for routine runs.
 
-```bash
-set -a
-source .env
-set +a
-mkdir -p "$HF_HOME" "$SMOKE_OUTPUT_ROOT"
-```
-
-The current `.env` values are:
+Recommended `.env` values for paper-aligned runs are:
 
 ```bash
 HF_TOKEN=
@@ -89,27 +99,41 @@ HF_HUB_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/hub
 HF_DATASETS_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/datasets
 SMOKE_OUTPUT_ROOT=/srv/scratch/z5534565/ssae-codi/smoke
 MODEL_REPO=zen-E/CODI-gpt2
-DATASET_REPO=openai/gsm8k
-DATASET_CONFIG=main
+DATASET_REPO=zen-E/GSM8k-Aug
+# DATASET_CONFIG is loader-dependent for this repo's scripts.
+# Keep/update it according to the script-specific default.
 ```
 
 ## Run
 
-Smoke test:
+Default mode for non-training work is interactive one-liners from the repo root.
+
+Smoke test (minimal):
 
 ```bash
-set -a
-source .env
-set +a
-torchrun tests/test_smoke.py
+torchrun --nproc_per_node=1 tests/test_smoke.py
 ```
+
+Inference (minimal):
+
+```bash
+torchrun --nproc_per_node=1 src/run_inference.py --max-samples 1
+```
+
+Hidden capture (minimal):
+
+```bash
+torchrun --nproc_per_node=1 src/inspect_latent.py --max-samples 1
+```
+
+Training jobs can still use PBS for scheduling, but job scripts should only launch Python entrypoints and should not embed `export` or output-directory setup logic.
 
 ## Smoke Coverage
 
 The smoke test currently checks only two things:
 
 - the CODI repository can be resolved and cached from Hugging Face under `HF_HOME`;
-- the GSM8K dataset can be downloaded once, saved under `HF_HOME/saved-datasets`, and reused on later runs without re-downloading.
+- the configured dataset can be downloaded once, saved under `HF_HOME/saved-datasets`, and reused on later runs without re-downloading.
 
 ## Limits
 
