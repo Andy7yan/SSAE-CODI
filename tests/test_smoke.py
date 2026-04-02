@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 try:
     from datasets import DatasetDict, load_dataset, load_from_disk  # type: ignore
-    from src.model_loader import HF_TOKEN, MODEL_REPO, get_special_token_ids, load_codi_gpt2  # type: ignore
+    from model import HF_TOKEN, MODEL_REPO, get_special_token_ids, load_codi_gpt2  # type: ignore
 except ModuleNotFoundError as exc:
     missing_pkg = exc.name or "a required package"
     raise ModuleNotFoundError(
