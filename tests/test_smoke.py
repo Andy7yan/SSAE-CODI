@@ -1,15 +1,16 @@
 import json
 import os
 import random
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 try:
-    import torch  # type: ignore
     from datasets import DatasetDict, load_dataset, load_from_disk  # type: ignore
-    from huggingface_hub import snapshot_download  # type: ignore
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+    from src.model_loader import HF_TOKEN, MODEL_REPO, get_special_token_ids, load_codi_gpt2  # type: ignore
 except ModuleNotFoundError as exc:
     missing_pkg = exc.name or "a required package"
     raise ModuleNotFoundError(
@@ -27,13 +28,8 @@ HF_HOME = Path("/srv/scratch/z5534565/ssae-codi/hf-home").resolve()
 HF_HUB_CACHE = (HF_HOME / "hub").resolve()
 HF_DATASETS_CACHE = (HF_HOME / "datasets").resolve()
 SMOKE_OUTPUT_ROOT = Path("/srv/scratch/z5534565/ssae-codi/smoke").resolve()
-MODEL_REPO = "zen-E/CODI-gpt2"
-BASE_MODEL_REPO = "openai-community/gpt2"
 DATASET_REPO = "openai/gsm8k"
 DATASET_CONFIG = "main"
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN") or os.getenv("HUGGINGFACE_TOKEN")
-NUM_LATENT = 6
-TORCH_DTYPE = torch.float32
 TRAIN_SAMPLE_COUNT = 50
 SAMPLE_SEED = 42
 
@@ -62,170 +58,19 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
-def _model_cache_dir(repo_id: str) -> Path:
-    return HF_HUB_CACHE / f"models--{repo_id.replace('/', '--')}"
-
-
 def _dataset_disk_path(dataset_repo: str, dataset_config: str) -> Path:
     slug = f"{dataset_repo.replace('/', '--')}--{dataset_config}"
     return HF_HOME / "saved-datasets" / slug
 
 
-def _collect_weight_files(snapshot_path: Path) -> list[str]:
-    candidates = [
-        *snapshot_path.glob("*.safetensors"),
-        *snapshot_path.glob("*.bin"),
-        *snapshot_path.glob("*.index.json"),
-    ]
-    weight_files = sorted({path.name for path in candidates})
-    if not weight_files:
-        raise RuntimeError(f"No model weight files were found under {snapshot_path}.")
-    return weight_files
-
-
-def _load_state_dict(checkpoint_file: Path) -> dict[str, Any]:
-    if checkpoint_file.suffix == ".safetensors":
-        try:
-            from safetensors.torch import load_file  # type: ignore
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                "Missing Python dependency 'safetensors' required to read model.safetensors."
-            ) from exc
-        return dict(load_file(checkpoint_file))
-    return dict(torch.load(checkpoint_file, map_location="cpu"))
-
-
-def _infer_projection_spec(state_dict: dict[str, Any], hidden_size: int) -> tuple[bool, int, bool]:
-    projection_keys = [key for key in state_dict if key.startswith("prj.")]
-    if not projection_keys:
-        return False, hidden_size, False
-
-    first_linear_weight = state_dict.get("prj.1.weight")
-    if first_linear_weight is None:
-        return True, hidden_size, any(key.startswith("prj.ln.") for key in projection_keys)
-
-    prj_dim = int(first_linear_weight.shape[0])
-    has_layer_norm = any(key.startswith("prj.ln.") for key in projection_keys)
-    return True, prj_dim, has_layer_norm
-
-
-def _resolve_checkpoint_file(snapshot_path: Path) -> Path:
-    for file_name in ("model.safetensors", "pytorch_model.bin"):
-        candidate = snapshot_path / file_name
-        if candidate.exists():
-            return candidate
-    raise RuntimeError(
-        f"Unable to find model.safetensors or pytorch_model.bin under {snapshot_path}."
-    )
-
-
-def _load_or_build_model_bundle(snapshot_path: Path) -> tuple[Any, Any]:
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            snapshot_path,
-            token=HF_TOKEN,
-            trust_remote_code=True,
-            local_files_only=True,
-            use_fast=False,
-        )
-        model = AutoModelForCausalLM.from_pretrained(
-            snapshot_path,
-            token=HF_TOKEN,
-            trust_remote_code=True,
-            local_files_only=True,
-            torch_dtype=TORCH_DTYPE,
-        )
-        model.eval()
-        return model, tokenizer
-    except Exception:
-        checkpoint_file = _resolve_checkpoint_file(snapshot_path)
-        state_dict = _load_state_dict(checkpoint_file)
-
-        base_model = AutoModelForCausalLM.from_pretrained(
-            BASE_MODEL_REPO,
-            token=HF_TOKEN,
-            trust_remote_code=True,
-            torch_dtype=TORCH_DTYPE,
-        )
-        tokenizer = AutoTokenizer.from_pretrained(
-            BASE_MODEL_REPO,
-            token=HF_TOKEN,
-            trust_remote_code=True,
-            use_fast=False,
-        )
-
-        original_vocab_size = int(base_model.config.vocab_size)
-        hidden_size = int(base_model.config.hidden_size)
-        use_prj, prj_dim, has_layer_norm = _infer_projection_spec(state_dict, hidden_size)
-        nn = torch.nn
-
-        class MinimalOfficialCodiGpt2(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.model_name = BASE_MODEL_REPO
-                self.codi = base_model
-                self.training = False
-                self.pad_token_id = original_vocab_size
-                self.bot_id = original_vocab_size + 1
-                self.eot_id = original_vocab_size + 2
-                self.codi.resize_token_embeddings(original_vocab_size + 3)
-                self.dim = int(self.codi.config.hidden_size)
-                self.num_latent = NUM_LATENT
-                self.use_prj = use_prj
-                if use_prj:
-                    self.prj = nn.Sequential(
-                        nn.Dropout(0.0),
-                        nn.Linear(self.dim, prj_dim),
-                        nn.GELU(),
-                        nn.Linear(prj_dim, self.dim),
-                    )
-                    if has_layer_norm:
-                        self.prj.add_module("ln", nn.LayerNorm(self.dim))
-
-            def get_input_embeddings(self) -> Any:
-                return self.codi.get_input_embeddings()
-
-        model = MinimalOfficialCodiGpt2()
-        model.load_state_dict(state_dict, strict=False)
-        model.codi.tie_weights()
-        model.eval()
-
-        if tokenizer.pad_token_id is None:
-            tokenizer.add_special_tokens({"pad_token": "[PAD]"})
-        tokenizer.pad_token_id = model.pad_token_id
-
-        return model, tokenizer
-
-
 def _validate_model_repo(repo_id: str) -> tuple[str, list[str], str, bool]:
-    cache_dir = _model_cache_dir(repo_id)
-    cache_hit = cache_dir.exists()
+    if repo_id != MODEL_REPO:
+        raise RuntimeError(f"Unsupported smoke model repository: {repo_id}")
 
-    if cache_hit:
-        try:
-            snapshot_path = snapshot_download(
-                repo_id=repo_id,
-                token=HF_TOKEN,
-                cache_dir=str(HF_HUB_CACHE),
-                local_files_only=True,
-            )
-        except Exception:
-            snapshot_path = snapshot_download(
-                repo_id=repo_id,
-                token=HF_TOKEN,
-                cache_dir=str(HF_HUB_CACHE),
-            )
-    else:
-        snapshot_path = snapshot_download(
-            repo_id=repo_id,
-            token=HF_TOKEN,
-            cache_dir=str(HF_HUB_CACHE),
-        )
-    snapshot = Path(snapshot_path).resolve()
-    _, tokenizer = _load_or_build_model_bundle(snapshot)
-    weight_files = _collect_weight_files(snapshot)
+    model, tokenizer = load_codi_gpt2(HF_HOME, HF_HUB_CACHE)
+    weight_files = list(model._codi_weight_files)
     tokenizer_class = tokenizer.__class__.__name__
-    return tokenizer_class, weight_files, str(snapshot), cache_hit
+    return tokenizer_class, weight_files, model._codi_snapshot_path, bool(model._codi_cache_hit)
 
 
 def _load_cached_or_remote_dataset(dataset_repo: str, dataset_config: str) -> tuple[DatasetDict, Path, bool]:

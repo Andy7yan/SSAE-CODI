@@ -7,9 +7,9 @@ The current focus is keeping a minimal CODI scaffold working on Katana.
 The goal is to provide a minimal, auditable scaffold that can:
 
 - load the target CODI checkpoint,
-- run one minimal inference pass,
-- expose the latent-thought generation path for inspection,
-- save hidden dumps in a format that later analysis code can reuse for hidden-state extraction and dataset building.
+- validate the reusable model loader against the target checkpoint,
+- verify dataset caching and sample export on Katana,
+- preserve a stable smoke-test entrypoint while the rest of `src/` is being rebuilt.
 
 This scaffold does not implement training, probes, or SSAE dataset construction yet.
 
@@ -48,12 +48,8 @@ References:
 |-- data/
 |   `-- gsm8k_debug.jsonl
 |-- src/
-|   |-- config.py
-|   |-- io_utils.py
-|   |-- inspect_latent.py
-|   |-- load_model.py
-|   |-- logging_utils.py
-|   `-- run_inference.py
+|   |-- __init__.py
+|   `-- model_loader.py
 `-- tests/
     `-- test_smoke.py
 ```
@@ -70,7 +66,7 @@ References:
     `-- smoke_summary.json
 ```
 
-The active Katana entry point is now the smoke test in `tests/test_smoke.py`. It caches model and dataset artifacts under `HF_HOME` and writes a single smoke summary JSON under `SMOKE_OUTPUT_ROOT`.
+The active Katana entry point is the smoke test in `tests/test_smoke.py`. The reusable CODI model-loading logic lives in `src/model_loader.py`, while the smoke test keeps ownership of dataset validation, sample export, and `smoke_summary.json`.
 
 ## Setup
 
@@ -88,9 +84,9 @@ python3 -m pip install --no-index --find-links wheelhouse -r requirements-katana
 
 If Hugging Face authentication is required, set `HF_TOKEN` in repo-root `.env` before running.
 
-All runtime parameters should be stored in repo-root `.env`. Entry scripts now auto-load `.env` at startup, so no `export` block is required for routine runs.
+Keep runtime parameters in repo-root `.env`, then export them into the shell or job environment before launching `torchrun`.
 
-Recommended `.env` values for paper-aligned runs are:
+Recommended `.env` values for the current smoke workflow are:
 
 ```bash
 HF_TOKEN=
@@ -99,48 +95,32 @@ HF_HUB_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/hub
 HF_DATASETS_CACHE=/srv/scratch/z5534565/ssae-codi/hf-home/datasets
 SMOKE_OUTPUT_ROOT=/srv/scratch/z5534565/ssae-codi/smoke
 MODEL_REPO=zen-E/CODI-gpt2
-DATASET_REPO=zen-E/GSM8k-Aug
-# DATASET_CONFIG is loader-dependent for this repo's scripts.
-# Keep/update it according to the script-specific default.
+DATASET_REPO=openai/gsm8k
+DATASET_CONFIG=main
 ```
 
 ## Run
 
-Default mode for non-training work is interactive one-liners from the repo root.
-
-Smoke test (minimal):
+Run the smoke test from the repo root:
 
 ```bash
 torchrun --nproc_per_node=1 tests/test_smoke.py
 ```
 
-Inference (minimal):
-
-```bash
-torchrun --nproc_per_node=1 src/run_inference.py --max-samples 1
-```
-
-Hidden capture (minimal):
-
-```bash
-torchrun --nproc_per_node=1 src/inspect_latent.py --max-samples 1
-```
-
-Training jobs can still use PBS for scheduling, but job scripts should only launch Python entrypoints and should not embed `export` or output-directory setup logic.
+This command resolves `zen-E/CODI-gpt2` through `src/model_loader.py`, checks dataset caching for `openai/gsm8k`, exports the 50-sample training subset, and writes the summary artifact under `SMOKE_OUTPUT_ROOT`.
 
 ## Smoke Coverage
 
-The smoke test currently checks only two things:
+The smoke test currently checks three things:
 
 - the CODI repository can be resolved and cached from Hugging Face under `HF_HOME`;
+- the reusable loader in `src/model_loader.py` can construct the model/tokenizer bundle expected by the smoke path;
 - the configured dataset can be downloaded once, saved under `HF_HOME/saved-datasets`, and reused on later runs without re-downloading.
 
 ## Limits
 
-- The current code only targets inference and inspection.
+- The current code only targets smoke validation and model loading.
 - No training logic is included.
-- `seed-only` capture is the safest supported mode.
-- `per-latent-step` is implemented for the official-style CODI latent loop and falls back conservatively for generic upstream models.
 - If upstream checkpoint packaging changes, the loader may need a small adapter update.
 
 ## Note
@@ -210,7 +190,7 @@ At the current stage, the project focuses on the following scope:
 - **Primary interpretability method:** Step-wise Sparse Autoencoder (SSAE)
 - **Primary task domain:** mathematical reasoning
 - **Initial dataset focus:** GSM8K-based setup
-- **Primary emphasis:** engineering implementation, latent extraction, SSAE adaptation, and interpretability-oriented analysis
+- **Primary emphasis:** smoke-test stability, model loading, dataset validation, and future SSAE-oriented analysis
 
 This repository is currently in an early setup stage and will be expanded incrementally as the implementation progresses.
 
